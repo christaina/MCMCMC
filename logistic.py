@@ -17,8 +17,9 @@ class LogisticRegression(LinearClassifierMixin):
         return 1./ (1. + np.exp(-lin))
 
     def softmax(self, vec):
+        vec = vec - np.max(vec)
         xform = np.exp(vec)
-        xform = xform / sum(xform)
+        xform /= np.sum(xform)
         return xform
 
     def fit(self, X, y):
