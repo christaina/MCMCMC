@@ -40,9 +40,7 @@ class LogisticRegression(LinearClassifierMixin):
         self.w_samples_ = w_samples
 
         resamped = rng.multinomial(self.n_iter, self.weights_)
-        resamp_ind = ([[i]*x for i, x in enumerate(resamped) if x > 0])
-        resamp_ind = np.array([ind for inds in resamp_ind for ind in inds])
-        coefs = np.mean(w_samples[resamp_ind], axis=0)
+        coefs = np.mean(np.repeat(w_samples, resamped, axis=0), axis=0)
         self.coef_ = coefs[:-1]
         self.intercept_ = coefs[-1]
 
