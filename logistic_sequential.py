@@ -6,10 +6,14 @@ from sklearn.utils import check_random_state
 from sklearn.metrics import log_loss
 
 class LogisticRegression(LinearClassifierMixin):
-    def __init__(self, scale=1.0, n_iter=20000, random_state=None):
+    """
+    Logistic Regression using Sequential Monte Carlo.
+    """
+    def __init__(self, scale=1.0, n_iter=20000, random_state=None, prior_scale=0.1):
         self.scale = scale
         self.n_iter = n_iter
         self.random_state = random_state
+        self.prior_scale = prior_scale
 
     def logistic_function(self, X, w):
         lin = np.matmul(X,w[:-1])+w[-1]
@@ -23,23 +27,47 @@ class LogisticRegression(LinearClassifierMixin):
 
     def adjust_samples(self,weight_t,w_samples_t):
         resamped = self.rng.multinomial(self.n_iter,weight_t)
-        coef = np.mean(np.repeat(w_samples_t, resamped,axis=0),axis=0)
+        coef = np.mean(np.repeat(w_samples_t, resamped, axis=0), axis=0)
         return coef
+
+    def partial_fit(self, X, y):
+        X, y = check_X_y(X, y)
+        n_features = X.shape[1] + 1
+
+        # Called first time
+        if not hasattr(self, "time_"):
+            self.rng_ = check_random_state(self.random_state)
+            self.w_ = self.rng_.multivariate_normal(
+                np.zeros(n_features),
+                self.prior_scale * np.eye(n_features), size=self.n_iter)
+            self.time_ = 1
+        else:
+            self.time_ += 1
+            samples = np.zeros((self.n_iter, n_features))
+            cov = self.scale * np.eye(n_features)
+            weights = np.zeros(self.n_iter)
+
+            for i in range(self.n_iter):
+                samples[i] = self.rng_.multivariate_normal(self.w_[i], cov)
+                weights[i] = -log_loss(y, self.logistic_function(X, samples[i]))
+            self.weights_ = self.softmax(weights)
+            self.w_ = samples[self.rng_.multinomial(self.n_iter, self.weights_)]
+
 
     def fit(self, X, y, t):
         self.rng = check_random_state(self.random_state)
         X, y = check_X_y(X, y)
-        w_dim = X.shape[1]+1
+        w_dim = X.shape[1] + 1
 
-        unique_t, self.rev_index = np.unique(t,return_inverse=True)
-        w_samples = np.ones((self.n_iter, len(unique_t),w_dim))
-        weights = np.ones((self.n_iter,len(unique_t)))
+        unique_t, self.rev_index = np.unique(t, return_inverse=True)
+        w_samples = np.ones((self.n_iter, len(unique_t), w_dim))
+        weights = np.ones((self.n_iter, len(unique_t)))
         cov = self.scale * np.eye(w_dim)
         for i in range(self.n_iter):
-            w = np.random.multivariate_normal(np.zeros(w_dim),\
-                                np.eye(w_dim)*10)
+            w = np.random.multivariate_normal(
+                np.zeros(w_dim), np.eye(w_dim)*10)
 
-            for j,time in enumerate(unique_t):
+            for j, time in enumerate(unique_t):
                 t_ind = np.where(t==time)
                 X_t = X[t_ind]
                 y_t = y[t_ind]
