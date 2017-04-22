@@ -32,7 +32,7 @@ class LogisticRegression(LinearClassifierMixin):
         coef = np.mean(np.repeat(w_samples_t, resamped, axis=0), axis=0)
         return coef
 
-    def partial_fit(self, X=None, y=None, n_features=10):
+    def partial_fit(self, X=None, y=None, labels=None, n_features=10):
 
         # Called first time
         if X is None:
@@ -49,7 +49,7 @@ class LogisticRegression(LinearClassifierMixin):
 
             for i in range(self.n_iter):
                 samples[i] = self.rng_.multivariate_normal(self.w_[i], cov)
-                weights[i] = -log_loss(y, self.logistic_function(X, samples[i]))
+                weights[i] = -log_loss(y, self.logistic_function(X, samples[i]),labels=labels)
             self.weights_ = self.softmax(weights)
             self.w_ = samples[np.repeat(np.arange(self.n_iter), \
                     np.random.multinomial(self.n_iter,self.weights_))]
@@ -57,37 +57,5 @@ class LogisticRegression(LinearClassifierMixin):
         self.coef_ = coefs[: n_features-1]
         self.intercept_ = coefs[-1]
 
-    def fit(self, X, y, t):
-        self.rng = check_random_state(self.random_state)
-        X, y = check_X_y(X, y)
-        w_dim = X.shape[1] + 1
-
-        unique_t, self.rev_index = np.unique(t, return_inverse=True)
-        w_samples = np.ones((self.n_iter, len(unique_t), w_dim))
-        weights = np.ones((self.n_iter, len(unique_t)))
-        cov = self.scale * np.eye(w_dim)
-        for i in range(self.n_iter):
-            w = np.random.multivariate_normal(
-                np.zeros(w_dim), np.eye(w_dim)*10)
-
-            for j, time in enumerate(unique_t):
-                t_ind = np.where(t==time)
-                X_t = X[t_ind]
-                y_t = y[t_ind]
-                w = self.rng.multivariate_normal(w, cov)
-                w_samples[i][j]=w
-                weights[i][j] = -log_loss(y_t, self.logistic_function(X_t, w))
-
-        self.weights_ = np.apply_along_axis(self.softmax, 0, weights)
-        self.w_samples_ = w_samples
-
-        coef = np.array([self.adjust_samples(self.weights_[:,i],self.w_samples_[:,i]) \
-                        for i in xrange(self.weights_.shape[1])])
-        self.coef_ = coef[:,:-1]
-        self.intercept_ = coef[:,-1]
-
     def predict(self, X):
         return (np.dot(X, self.coef_) + self.intercept_ > 0).astype(np.int)
-        # self.w_
-        # return np.array(np.sum(np.multiply(self.coef_[self.rev_index],X),axis=1) +\
-        #  self.intercept_[self.rev_index] > 0,dtype=np.int)
