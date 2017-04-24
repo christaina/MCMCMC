@@ -7,9 +7,15 @@ from sklearn.utils import check_X_y
 from sklearn.utils import check_random_state
 from sklearn.metrics import log_loss
 
-def softmax(X, w):
-    lin = np.dot(X, w[:-1]) + w[-1]
-    return 1./ (1. + np.exp(-lin))
+def softmax(X, w, n_labels=1):
+    logits = np.dot(X, w[:-1]) + w[-1]
+    if n_labels == 1:
+        return 1./ (1. + np.exp(-logits))
+    else:
+        logits -= np.expand_dims(np.max(logits, axis=1), axis=1)
+        logits = np.exp(logits)
+        logits /= np.expand_dims(np.sum(logits), axis=1)
+        return logits
 
 def _log_loss(seed, mean, cov, X, y, labels):
     rng = check_random_state(seed)
@@ -19,7 +25,7 @@ def _log_loss(seed, mean, cov, X, y, labels):
     if n_labels == 2:
         n_labels = 1
     sample = np.reshape(sample, (n_labels, -1))
-    probs = softmax(X, sample.T)
+    probs = softmax(X, sample.T, n_labels)
     weight = -log_loss(y, probs, labels=labels)
     return sample, weight
 
@@ -57,14 +63,17 @@ class LogisticRegression(LinearClassifierMixin, BaseEstimator):
                 n_features += 1
             self.rng_ = check_random_state(self.random_state)
 
+            n_labels = len(self.classes_)
             if len(self.classes_) == 2:
                 n_labels = 1
+
             total = n_features * n_labels
             self.w_ = self.rng_.multivariate_normal(
                 np.zeros(total),
                 self.prior_scale*np.eye(total), size=self.n_iter)
         else:
-            if len(self.classes_) == 2:
+            n_labels = len(self.classes_)
+            if n_labels == 2:
                 n_labels = 1
             X, y = check_X_y(X, y)
 
