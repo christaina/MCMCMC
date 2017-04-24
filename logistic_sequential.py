@@ -16,7 +16,6 @@ class LogisticRegression(LinearClassifierMixin):
         self.prior_scale = prior_scale
         self.rng_ = check_random_state(random_state)
 
-
     def logistic_function(self, X, w):
         lin = np.matmul(X,w[:-1])+w[-1]
         return 1./ (1. + np.exp(-lin))
