@@ -14,7 +14,6 @@ class LogisticRegression(LinearClassifierMixin):
         self.n_iter = n_iter
         self.random_state = random_state
         self.prior_scale = prior_scale
-        self.rng_ = check_random_state(random_state)
 
     def logistic_function(self, X, w):
         lin = np.matmul(X,w[:-1])+w[-1]
@@ -32,6 +31,8 @@ class LogisticRegression(LinearClassifierMixin):
         return coef
 
     def partial_fit(self, X=None, y=None, labels=None, n_features=10):
+        if labels is None:
+            labels = np.unique(y)
 
         # Called first time
         if X is None:
@@ -48,7 +49,8 @@ class LogisticRegression(LinearClassifierMixin):
 
             for i in range(self.n_iter):
                 samples[i] = self.rng_.multivariate_normal(self.w_[i], cov)
-                weights[i] = -log_loss(y, self.logistic_function(X, samples[i]),labels=labels)
+                weights[i] = -log_loss(
+                    y, self.logistic_function(X, samples[i]), labels=labels)
             self.weights_ = self.softmax(weights)
             self.w_ = samples[np.repeat(np.arange(self.n_iter), \
                     np.random.multinomial(self.n_iter,self.weights_))]
