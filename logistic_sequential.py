@@ -37,22 +37,26 @@ class LogisticRegression(LinearClassifierMixin, BaseEstimator):
         xform /= np.sum(xform)
         return xform
 
-    def partial_fit(self, X=None, y=None, labels=None, n_features=10):
+    def partial_fit(self, X=None, y=None, labels=None, n_features=None):
         # Called first time
         if X is None:
-            if labels is not None:
-                self.labels_ = labels
-            self.rng_ = check_random_state(self.random_state)
+            if labels is None:
+                raise ValueError("labels should be provided at first call to "
+                                 "partial_fit.")
+            if n_features is None:
+                raise ValueError("n_features should be provided at first call "
+                                 "to partial_fit.")
+
+            self.labels_ = labels
             if self.fit_intercept:
                 n_features += 1
+            self.rng_ = check_random_state(self.random_state)
             self.w_ = self.rng_.multivariate_normal(
                 np.zeros(n_features),
                 self.prior_scale * np.eye(n_features), size=self.n_iter)
         else:
             X, y = check_X_y(X, y)
 
-            if not hasattr(self, "labels_"):
-                self.labels_ = np.unique(y)
             if self.fit_intercept:
                 n_features = X.shape[1] + 1
             else:

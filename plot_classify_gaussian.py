@@ -24,7 +24,7 @@ test_scores = []
 for scale in scales:
     lr = LogisticRegression(
         random_state=0, n_iter=100000, n_jobs=-1, scale=scale, prior_scale=0.2)
-    lr.partial_fit(n_features=2)
+    lr.partial_fit(n_features=2, labels=np.unique(y))
     lr.partial_fit(X_train, y_train)
     print(lr.samples_)
     print(time() - t)
