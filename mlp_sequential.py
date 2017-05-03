@@ -40,10 +40,11 @@ class MLP(ClassifierMixin):
         return softmax(logits)
 
     def mh_step(self, X,y, wi, wo):
-        mh_i = wi.flatten()
-        mh_o = wo.flatten()
+        mh_i = wi
+        mh_o = wo
         prob = -log_loss(
-            y, self.forward(X, wi, wo),
+            y, self.forward(X, mh_i.reshape(self.samples_i_.shape[1],self.n_hidden)\
+            , mh_o.reshape(self.n_hidden,len(self.classes_))),
             labels=self.classes_) - self.alpha * (np.dot(mh_i, mh_i) + np.dot(mh_o, mh_o))
 
         cov_i = np.eye(len(mh_i)) * self.mh_scale
@@ -53,7 +54,7 @@ class MLP(ClassifierMixin):
             samp_o = np.random.multivariate_normal(mh_o,cov_o)
 
             samp_prob = -log_loss(
-                y, self.forward(X, samp_i.reshape(self.wi_.shape[1],self.n_hidden),\
+                y, self.forward(X, samp_i.reshape(self.samples_i_.shape[1],self.n_hidden),\
                  samp_o.reshape(self.n_hidden,len(self.classes_))),
                 labels=self.classes_) - \
                 self.alpha * (np.dot(samp_i, samp_i) + np.dot(samp_o, samp_o))
@@ -63,8 +64,7 @@ class MLP(ClassifierMixin):
                 mh_i = samp_i
                 mh_o = samp_o
                 prob = samp_prob
-        return mh_i.reshape(self.wi_.shape[1],self.n_hidden), \
-                    mh_o.reshape(self.n_hidden,len(self.classes_))
+        return mh_i, mh_o
 
     def partial_fit(self, X=None, y=None, labels=None, n_features=10):
         if X is None:
@@ -116,9 +116,10 @@ class MLP(ClassifierMixin):
             self.samples_o_ = samples_o
             self.weights_ = softmax_1D(weights)
 
+            self.multi_ = self.rng_.multinomial(self.n_iter, self.weights_)
             resampled = np.repeat(
                 np.arange(self.n_iter),
-                self.rng_.multinomial(self.n_iter, self.weights_))
+                self.multi_)
 
             self.wi_ = self.wi_[resampled]
             self.wo_ = self.wo_[resampled]
@@ -126,8 +127,8 @@ class MLP(ClassifierMixin):
             for i in range(self.n_iter):
                 self.wi_[i], self.wo_[i] = self.mh_step(X,y,self.wi_[i],self.wo_[i])
 
-            self.coef_i_ = np.mean(self.wi_.reshape(n_samples,n_features,n_hidden), axis=0)
-            self.coef_o_ = np.mean(self.wo_.reshape(n_samples,n_hidden,len(self.classes_)), axis=0)
+            self.coef_i_ = np.mean(self.wi_.reshape(self.n_iter,n_features,n_hidden), axis=0)
+            self.coef_o_ = np.mean(self.wo_.reshape(self.n_iter,n_hidden,len(self.classes_)), axis=0)
             return self
 
 
