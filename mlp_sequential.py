@@ -20,12 +20,13 @@ def softmax_1D(vec):
 
 class MLP(ClassifierMixin):
     def __init__(self, scale=1.0, n_iter=100000, random_state=None,
-                 prior_scale=0.2, n_hidden=10):
+                 prior_scale=0.2, n_hidden=10, alpha=1e-3):
         self.scale = scale
         self.n_iter = n_iter
         self.random_state = random_state
         self.prior_scale = prior_scale
         self.n_hidden = n_hidden
+        self.alpha = alpha
 
     def logistic_function(self, X, w):
         lin = np.matmul(X,w[:-1]) + w[-1]
@@ -74,15 +75,14 @@ class MLP(ClassifierMixin):
             cov_o = self.scale * np.eye(n_hidden*len(self.classes_))
 
             for i in range(self.n_iter):
-                samples_i[i] = (
-                    self.rng_.multivariate_normal(self.wi_[i], cov_i).reshape(n_features, n_hidden)
-                )
-                samples_o[i] = (
-                    self.rng_.multivariate_normal(self.wo_[i], cov_o).reshape(n_hidden, len(self.classes_))
-                )
+                s_i = self.rng_.multivariate_normal(self.wi_[i], cov_i)
+                samples_i[i] = s_i.reshape(n_features, n_hidden)
+
+                s_o = self.rng_.multivariate_normal(self.wo_[i], cov_o)
+                samples_o[i] = s_o.reshape(n_hidden, len(self.classes_))
                 weights[i] = -log_loss(
                     y, self.forward(X, samples_i[i], samples_o[i]),
-                    labels=self.classes_)
+                    labels=self.classes_) - self.alpha * (np.dot(s_i, s_i) + np.dot(s_o, s_o))
 
             self.samples_i_ = samples_i
             self.samples_o_ = samples_o
