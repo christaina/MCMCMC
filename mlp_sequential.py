@@ -126,8 +126,8 @@ class MLP(ClassifierMixin):
             for i in range(self.n_iter):
                 self.wi_[i], self.wo_[i] = self.mh_step(X,y,self.wi_[i],self.wo_[i])
 
-            self.coef_i_ = np.mean(samples_i[resampled], axis=0)
-            self.coef_o_ = np.mean(samples_o[resampled], axis=0)
+            self.coef_i_ = np.mean(self.wi_.reshape(n_samples,n_features,n_hidden), axis=0)
+            self.coef_o_ = np.mean(self.wo_.reshape(n_samples,n_hidden,len(self.classes_)), axis=0)
             return self
 
 
