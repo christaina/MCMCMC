@@ -1,4 +1,6 @@
 import numpy as np
+from functools import partial
+from scipy.optimize import basinhopping
 from sklearn.base import ClassifierMixin
 from sklearn.linear_model.base import LinearClassifierMixin
 from sklearn.utils import check_X_y
@@ -17,10 +19,20 @@ def softmax_1D(vec):
     xform /= np.sum(xform)
     return xform
 
+def log_likelihood(x, X, y, mlp):
+    n_features = X.shape[1]
+    wi_shape = (n_features + 1) * mlp.n_hidden
+    wi, wo = x[:wi_shape], x[wi_shape:]
+    reg = np.dot(wi, wi) + np.dot(wo, wo)
+    wi = np.reshape(wi, ((n_features+1, mlp.n_hidden)))
+    wo = np.reshape(wo, (mlp.n_hidden, len(mlp.classes_)))
+    return -log_loss(y, mlp.forward(X, wi, wo), labels=mlp.classes_) - mlp.alpha * reg
+
 
 class MLP(ClassifierMixin):
-    def __init__(self, scale=1.0, n_iter=100000, mh_scale=1.0,mh_iter=10000, random_state=None,
-                 prior_scale=0.2, n_hidden=10, alpha=1e-3):
+    def __init__(self, scale=1.0, n_iter=100000, mh_scale=1.0, mh_iter=10000,
+                 random_state=None, prior_scale=0.2, n_hidden=10, alpha=1e-3,
+                 local="basinhopping"):
         self.scale = scale
         self.mh_scale = mh_scale
         self.n_iter = n_iter
@@ -29,6 +41,7 @@ class MLP(ClassifierMixin):
         self.prior_scale = prior_scale
         self.n_hidden = n_hidden
         self.alpha = alpha
+        self.local = local
 
     def logistic_function(self, X, w):
         lin = np.matmul(X,w[:-1]) + w[-1]
@@ -39,12 +52,12 @@ class MLP(ClassifierMixin):
         logits = np.dot(first, wo)
         return softmax(logits)
 
-    def mh_step(self, X,y, wi, wo):
+    def mh_step(self, X, y, wi, wo):
         mh_i = wi
         mh_o = wo
         prob = -log_loss(
             y, self.forward(X, mh_i.reshape(self.samples_i_.shape[1],self.n_hidden)\
-            , mh_o.reshape(self.n_hidden,len(self.classes_))),
+            , mh_o.reshape(self.n_hidden, len(self.classes_))),
             labels=self.classes_) - self.alpha * (np.dot(mh_i, mh_i) + np.dot(mh_o, mh_o))
 
         cov_i = np.eye(len(mh_i)) * self.mh_scale
@@ -124,11 +137,23 @@ class MLP(ClassifierMixin):
             self.wi_ = self.wi_[resampled]
             self.wo_ = self.wo_[resampled]
 
-            for i in range(self.n_iter):
-                self.wi_[i], self.wo_[i] = self.mh_step(X,y,self.wi_[i],self.wo_[i])
+            if self.local == "mh":
+                for i in range(self.n_iter):
+                    self.wi_[i], self.wo_[i] = self.mh_step(
+                    X, y, self.wi_[i], self.wo_[i])
+            else:
+                wi_len = len(self.wi_[0])
+                for i in range(self.n_iter):
+                    x0 = np.concatenate((self.wi_[i], self.wo_[i]))
 
-            self.coef_i_ = np.mean(self.wi_.reshape(self.n_iter,n_features,n_hidden), axis=0)
-            self.coef_o_ = np.mean(self.wo_.reshape(self.n_iter,n_hidden,len(self.classes_)), axis=0)
+                    opt_func = partial(log_likelihood, X=X, y=y, mlp=self)
+                    res = basinhopping(opt_func, x0)
+                    self.wi_[i], self.wo_[i] = res.x[: wi_len], res.x[wi_len:]
+
+            self.coef_i_ = np.mean(
+                self.wi_.reshape(self.n_iter, n_features, n_hidden), axis=0)
+            self.coef_o_ = np.mean(
+                self.wo_.reshape(self.n_iter, n_hidden, len(self.classes_)), axis=0)
             return self
 
 
