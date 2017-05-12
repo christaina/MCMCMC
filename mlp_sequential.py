@@ -181,14 +181,15 @@ class MLP(ClassifierMixin):
             best_coef_i_ = None
             best_coef_o_ = None
             max_score = None
-            
+
             for k in set(clust_w):
                 clust_wi_ = np.mean(
                     self.wi_[np.where(clust_w==k)],axis=0).reshape(n_features,n_hidden)
                 clust_wo_ = np.mean(
                     self.wo_[np.where(clust_w==k)],axis=0).reshape(n_hidden,len(self.classes_))
-                clust_score = accuracy_score(y,
-                        np.argmax(self.forward(X,clust_wi_, clust_wo_),axis=1))
+
+                clust_score = -log_loss(y,
+                        self.forward(X,clust_wi_, clust_wo_),labels=self.classes_)
                 if max_score is None or clust_score > max_score:
                     best_coef_i_,best_coef_o_ = clust_wi_, clust_wo_
                     max_score = clust_score
