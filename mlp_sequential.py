@@ -35,7 +35,7 @@ def neg_log_likelihood(x, X, y, mlp):
 class MLP(ClassifierMixin):
     def __init__(self, scale=1.0, n_iter=100000, mh_scale=0.001, mh_iter=10000,
                  random_state=None, prior_scale=0.2, n_hidden=10, alpha=1e-3,
-                 local="basinhopping", init=None):
+                 local="basinhopping", init='swarm'):
         self.scale = scale
         self.mh_scale = mh_scale
         self.n_iter = n_iter
@@ -177,7 +177,6 @@ class MLP(ClassifierMixin):
                     self.wi_[np.where(clust_w==k)],axis=0).reshape(n_features,n_hidden)
                 clust_wo_ = np.mean(
                     self.wo_[np.where(clust_w==k)],axis=0).reshape(n_hidden,len(self.classes_))
-
 
                 clust_score = -log_loss(y,
                         self.forward(X,clust_wi_, clust_wo_),labels=self.classes_)
