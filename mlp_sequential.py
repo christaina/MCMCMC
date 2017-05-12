@@ -6,6 +6,8 @@ from sklearn.linear_model.base import LinearClassifierMixin
 from sklearn.utils import check_X_y
 from sklearn.utils import check_random_state
 from sklearn.metrics import log_loss
+from sklearn.metrics import accuracy_score
+from sklearn.cluster import KMeans
 
 def softmax(logits):
     logits -= np.expand_dims(np.max(logits, axis=1), axis=1)
@@ -30,7 +32,7 @@ def log_likelihood(x, X, y, mlp):
 
 
 class MLP(ClassifierMixin):
-    def __init__(self, scale=1.0, n_iter=100000, mh_scale=1.0, mh_iter=10000,
+    def __init__(self, scale=1.0, n_iter=100000, mh_scale=0.001, mh_iter=10000,
                  random_state=None, prior_scale=0.2, n_hidden=10, alpha=1e-3,
                  local="basinhopping"):
         self.scale = scale
@@ -78,6 +80,27 @@ class MLP(ClassifierMixin):
                 mh_o = samp_o
                 prob = samp_prob
         return mh_i, mh_o
+
+    def swarm_opt(x, func, scale=0.1, n_cand=10, n_iter=50, random_state=0):
+        rng = np.random.RandomState(0)
+        cov = scale * np.eye(len(x))
+
+        for i in range(n_iter):
+
+            x_cands = rng.multivariate_normal(x, cov, n_cand)
+            func_values = [func(x_cand) for x_cand in x_cands]
+            min_arg = np.argmin(func_values)
+            x_new = x_cands[min_arg]
+
+            old_best = func(x)
+            new_best = func(x_new)
+            if new_best > old_best:
+                break
+            x = x_new[:]
+            print("Iter %d" % i)
+            print(func(x))
+        return x, func(x)
+
 
     def partial_fit(self, X=None, y=None, labels=None, n_features=10):
         if X is None:
@@ -134,8 +157,8 @@ class MLP(ClassifierMixin):
                 np.arange(self.n_iter),
                 self.multi_)
 
-            self.wi_ = self.wi_[resampled]
-            self.wo_ = self.wo_[resampled]
+            self.wi_ = self.samples_i_[resampled].reshape(self.n_iter,-1)
+            self.wo_ = self.samples_o_[resampled].reshape(self.n_iter,-1)
 
             if self.local not in [None, "mh", "basinhopping"]:
                 raise ValueError("local should be one of None, mh or basinhopping")
@@ -152,10 +175,26 @@ class MLP(ClassifierMixin):
                     res = basinhopping(opt_func, x0)
                     self.wi_[i], self.wo_[i] = res.x[: wi_len], res.x[wi_len:]
 
-            self.coef_i_ = np.mean(
-                self.wi_.reshape(self.n_iter, n_features, n_hidden), axis=0)
-            self.coef_o_ = np.mean(
-                self.wo_.reshape(self.n_iter, n_hidden, len(self.classes_)), axis=0)
+            kmeans = KMeans()
+            clust_w = kmeans.fit(np.concatenate([self.wi_,self.wo_],axis=1)).labels_
+
+            best_coef_i_ = None
+            best_coef_o_ = None
+            max_score = None
+            
+            for k in set(clust_w):
+                clust_wi_ = np.mean(
+                    self.wi_[np.where(clust_w==k)],axis=0).reshape(n_features,n_hidden)
+                clust_wo_ = np.mean(
+                    self.wo_[np.where(clust_w==k)],axis=0).reshape(n_hidden,len(self.classes_))
+                clust_score = accuracy_score(y,
+                        np.argmax(self.forward(X,clust_wi_, clust_wo_),axis=1))
+                if max_score is None or clust_score > max_score:
+                    best_coef_i_,best_coef_o_ = clust_wi_, clust_wo_
+                    max_score = clust_score
+
+            self.coef_i_ = best_coef_i_
+            self.coef_o_ = best_coef_o_
             return self
 
 
