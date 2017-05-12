@@ -1,5 +1,6 @@
 import numpy as np
 from functools import partial
+from swarm_optimisation import swarm_opt
 from scipy.optimize import basinhopping
 from sklearn.base import ClassifierMixin
 from sklearn.linear_model.base import LinearClassifierMixin
@@ -21,20 +22,20 @@ def softmax_1D(vec):
     xform /= np.sum(xform)
     return xform
 
-def log_likelihood(x, X, y, mlp):
+def neg_log_likelihood(x, X, y, mlp):
     n_features = X.shape[1]
     wi_shape = (n_features + 1) * mlp.n_hidden
     wi, wo = x[:wi_shape], x[wi_shape:]
     reg = np.dot(wi, wi) + np.dot(wo, wo)
     wi = np.reshape(wi, ((n_features+1, mlp.n_hidden)))
     wo = np.reshape(wo, (mlp.n_hidden, len(mlp.classes_)))
-    return -log_loss(y, mlp.forward(X, wi, wo), labels=mlp.classes_) - mlp.alpha * reg
+    return log_loss(y, mlp.forward(X, wi, wo), labels=mlp.classes_) + mlp.alpha * reg
 
 
 class MLP(ClassifierMixin):
     def __init__(self, scale=1.0, n_iter=100000, mh_scale=0.001, mh_iter=10000,
                  random_state=None, prior_scale=0.2, n_hidden=10, alpha=1e-3,
-                 local="basinhopping"):
+                 local="basinhopping", init=None):
         self.scale = scale
         self.mh_scale = mh_scale
         self.n_iter = n_iter
@@ -44,6 +45,7 @@ class MLP(ClassifierMixin):
         self.n_hidden = n_hidden
         self.alpha = alpha
         self.local = local
+        self.init = init
 
     def logistic_function(self, X, w):
         lin = np.matmul(X,w[:-1]) + w[-1]
@@ -81,27 +83,6 @@ class MLP(ClassifierMixin):
                 prob = samp_prob
         return mh_i, mh_o
 
-    def swarm_opt(x, func, scale=0.1, n_cand=10, n_iter=50, random_state=0):
-        rng = np.random.RandomState(0)
-        cov = scale * np.eye(len(x))
-
-        for i in range(n_iter):
-
-            x_cands = rng.multivariate_normal(x, cov, n_cand)
-            func_values = [func(x_cand) for x_cand in x_cands]
-            min_arg = np.argmin(func_values)
-            x_new = x_cands[min_arg]
-
-            old_best = func(x)
-            new_best = func(x_new)
-            if new_best > old_best:
-                break
-            x = x_new[:]
-            print("Iter %d" % i)
-            print(func(x))
-        return x, func(x)
-
-
     def partial_fit(self, X=None, y=None, labels=None, n_features=10):
         if X is None:
             if labels is None:
@@ -137,8 +118,17 @@ class MLP(ClassifierMixin):
 
             for i in range(self.n_iter):
                 s_i = self.rng_.multivariate_normal(self.wi_[i], cov_i)
-                samples_i[i] = s_i.reshape(n_features, n_hidden)
                 s_o = self.rng_.multivariate_normal(self.wo_[i], cov_o)
+
+
+                if self.init == "swarm":
+                    wi_len = len(self.wi_[0])
+                    opt_func = partial(neg_log_likelihood, X=X, y=y, mlp=self)
+                    x0 = np.concatenate((s_i, s_o))
+                    x0, _ = swarm_opt(x0, opt_func)
+                    s_i, s_o = x0[:wi_len], x0[wi_len:]
+
+                samples_i[i] = s_i.reshape(n_features, n_hidden)
                 samples_o[i] = s_o.reshape(n_hidden, len(self.classes_))
 
                 reg = self.alpha * (np.dot(s_i, s_i) + np.dot(s_o, s_o))
@@ -171,7 +161,7 @@ class MLP(ClassifierMixin):
                 for i in range(self.n_iter):
                     x0 = np.concatenate((self.wi_[i], self.wo_[i]))
 
-                    opt_func = partial(log_likelihood, X=X, y=y, mlp=self)
+                    opt_func = partial(neg_log_likelihood, X=X, y=y, mlp=self)
                     res = basinhopping(opt_func, x0)
                     self.wi_[i], self.wo_[i] = res.x[: wi_len], res.x[wi_len:]
 

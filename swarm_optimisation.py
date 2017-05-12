@@ -16,6 +16,5 @@ def swarm_opt(x, func, scale=0.1, n_cand=10, n_iter=50, random_state=0):
         if new_best > old_best:
             break
         x = x_new[:]
-        print("Iter %d" % i)
-        print(func(x))
+
     return x, func(x)

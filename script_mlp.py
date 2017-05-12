@@ -26,13 +26,12 @@ X = minmax.fit_transform(X)
 acc_scores = []
 max_acc_scores = []
 
-
-n_iter = 1000
+n_iter = 100
 for scale in np.logspace(-3, 3, 10):
     print(scale)
     mlp = MLP(
         n_hidden=8, scale=scale, n_iter=n_iter, prior_scale=0.2,
-        random_state=0, alpha=0.0, local='mh',mh_iter=100)
+        random_state=0, alpha=0.0, local='mh', mh_iter=100, init="swarm")
     mlp.partial_fit(n_features=4, labels=np.unique(y))
     mlp.partial_fit(X, y)
 
