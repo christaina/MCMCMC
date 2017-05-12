@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.datasets import load_iris
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import log_loss
 from sklearn.utils.testing import assert_array_almost_equal
@@ -19,6 +20,9 @@ def softmax_1D(vec):
 
 iris = load_iris()
 X, y = iris.data, iris.target
+minmax = MinMaxScaler()
+X = minmax.fit_transform(X)
+
 acc_scores = []
 max_acc_scores = []
 
@@ -26,7 +30,7 @@ for scale in np.logspace(-3, 3, 10):
     print(scale)
     mlp = MLP(
         n_hidden=8, scale=scale, n_iter=100000, prior_scale=0.2,
-        random_state=0, alpha=0.0)
+        random_state=0, alpha=0.0, local=None)
     mlp.partial_fit(n_features=4, labels=np.unique(y))
     mlp.partial_fit(X, y)
 
