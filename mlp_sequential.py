@@ -137,11 +137,13 @@ class MLP(ClassifierMixin):
             self.wi_ = self.wi_[resampled]
             self.wo_ = self.wo_[resampled]
 
+            if self.local not in [None, "mh", "basinhopping"]:
+                raise ValueError("local should be one of None, mh or basinhopping")
             if self.local == "mh":
                 for i in range(self.n_iter):
                     self.wi_[i], self.wo_[i] = self.mh_step(
                     X, y, self.wi_[i], self.wo_[i])
-            else:
+            elif self.local == "basinhopping":
                 wi_len = len(self.wi_[0])
                 for i in range(self.n_iter):
                     x0 = np.concatenate((self.wi_[i], self.wo_[i]))
