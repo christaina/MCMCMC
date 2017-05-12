@@ -41,7 +41,8 @@ for local in ["mh", None]:
         print(scale)
         mlp = MLP(
             n_hidden=8, scale=scale, n_iter=n_iter, prior_scale=0.2,
-            random_state=0, alpha=0.0, local=local, mh_iter=100, init="swarm")
+            random_state=0, alpha=0.0, local=local, mh_iter=100, init="swarm",
+            activation="relu")
         mlp.partial_fit(n_features=4, labels=np.unique(y))
         mlp.partial_fit(X_train, y_train)
 

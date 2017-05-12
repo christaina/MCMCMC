@@ -22,6 +22,13 @@ def softmax_1D(vec):
     xform /= np.sum(xform)
     return xform
 
+def sigmoid(x):
+    if x > 0:
+        return 1.0 / (1 + np.exp(-x))
+    else:
+        exp_x = np.exp(x)
+        return exp_x / (1 + exp_x)
+
 def neg_log_likelihood(x, X, y, mlp):
     n_features = X.shape[1]
     wi_shape = (n_features + 1) * mlp.n_hidden
@@ -31,11 +38,10 @@ def neg_log_likelihood(x, X, y, mlp):
     wo = np.reshape(wo, (mlp.n_hidden, len(mlp.classes_)))
     return log_loss(y, mlp.forward(X, wi, wo), labels=mlp.classes_) + mlp.alpha * reg
 
-
 class MLP(ClassifierMixin):
     def __init__(self, scale=1.0, n_iter=100000, mh_scale=0.001, mh_iter=10000,
                  random_state=None, prior_scale=0.2, n_hidden=10, alpha=1e-3,
-                 local="basinhopping", init='swarm'):
+                 local="basinhopping", init='swarm', activation="identity"):
         self.scale = scale
         self.mh_scale = mh_scale
         self.n_iter = n_iter
@@ -46,13 +52,11 @@ class MLP(ClassifierMixin):
         self.alpha = alpha
         self.local = local
         self.init = init
-
-    def logistic_function(self, X, w):
-        lin = np.matmul(X,w[:-1]) + w[-1]
-        return 1./ (1. + np.exp(-lin))
+        self.activation = activation
 
     def forward(self, X, wi, wo):
         first = np.dot(X, wi[:-1, :]) + wi[-1]
+        first = self.act_func_(first)
         logits = np.dot(first, wo)
         return softmax(logits)
 
@@ -77,13 +81,25 @@ class MLP(ClassifierMixin):
                 self.alpha * (np.dot(samp_i, samp_i) + np.dot(samp_o, samp_o))
             r = np.log(self.rng_.rand())
             if  r <= min(0, samp_prob-prob):
-
                 mh_i = samp_i
                 mh_o = samp_o
                 prob = samp_prob
         return mh_i, mh_o
 
+
     def partial_fit(self, X=None, y=None, labels=None, n_features=10):
+        if self.activation not in ["identity", "relu", "tanh", "sigmoid"]:
+            raise ValueError("activation not recognised")
+
+        if self.activation == "relu":
+            self.act_func_ = lambda x: np.maximum(x, 0)
+        elif self.activation == "tanh":
+            self.act_func_ = np.tanh
+        elif self.activation == "sigmoid":
+            self.act_func_ = sigmoid
+        else:
+            self.act_func_ = lambda x: x
+
         if X is None:
             if labels is None:
                 raise ValueError("labels should be provided at first call to "
@@ -142,9 +158,7 @@ class MLP(ClassifierMixin):
             self.weights_ = softmax_1D(weights)
 
             self.multi_ = self.rng_.multinomial(self.n_iter, self.weights_)
-            resampled = np.repeat(
-                np.arange(self.n_iter),
-                self.multi_)
+            resampled = np.repeat(np.arange(self.n_iter), self.multi_)
 
             self.wi_ = self.samples_i_[resampled].reshape(self.n_iter,-1)
             self.wo_ = self.samples_o_[resampled].reshape(self.n_iter,-1)
@@ -177,8 +191,10 @@ class MLP(ClassifierMixin):
                 clust_wo_ = np.mean(
                     self.wo_[np.where(clust_w==k)],axis=0).reshape(n_hidden,len(self.classes_))
 
-                clust_score = -log_loss(y,
-                        self.forward(X,clust_wi_, clust_wo_),labels=self.classes_)
+                clust_score = -log_loss(
+                        y,
+                        self.forward(X, clust_wi_, clust_wo_),
+                        labels=self.classes_)
 
                 if max_score is None or clust_score > max_score:
                     best_coef_i_,best_coef_o_ = clust_wi_, clust_wo_
@@ -186,8 +202,12 @@ class MLP(ClassifierMixin):
 
             self.coef_i_ = best_coef_i_
             self.coef_o_ = best_coef_o_
-            return self
+        return self
 
+    def fit(self, X, y):
+        self.partial_fit(labels=np.unique(y), n_features=X.shape[1])
+        self.partial_fit(X, y)
+        return self
 
     def predict(self, X):
         f = self.forward(X, self.coef_i_, self.coef_o_)
