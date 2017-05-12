@@ -175,7 +175,7 @@ class MLP(ClassifierMixin):
                     res = basinhopping(opt_func, x0)
                     self.wi_[i], self.wo_[i] = res.x[: wi_len], res.x[wi_len:]
 
-            kmeans = KMeans()
+            kmeans = KMeans(random_state=self.rng_)
             clust_w = kmeans.fit(np.concatenate([self.wi_,self.wo_],axis=1)).labels_
 
             best_coef_i_ = None
@@ -188,8 +188,10 @@ class MLP(ClassifierMixin):
                 clust_wo_ = np.mean(
                     self.wo_[np.where(clust_w==k)],axis=0).reshape(n_hidden,len(self.classes_))
 
+
                 clust_score = -log_loss(y,
                         self.forward(X,clust_wi_, clust_wo_),labels=self.classes_)
+
                 if max_score is None or clust_score > max_score:
                     best_coef_i_,best_coef_o_ = clust_wi_, clust_wo_
                     max_score = clust_score
