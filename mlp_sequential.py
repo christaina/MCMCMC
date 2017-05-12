@@ -67,8 +67,8 @@ class MLP(ClassifierMixin):
         cov_i = np.eye(len(mh_i)) * self.mh_scale
         cov_o = np.eye(len(mh_o)) * self.mh_scale
         for i in range(self.mh_iter):
-            samp_i = np.random.multivariate_normal(mh_i,cov_i)
-            samp_o = np.random.multivariate_normal(mh_o,cov_o)
+            samp_i = self.rng_.multivariate_normal(mh_i,cov_i)
+            samp_o = self.rng_.multivariate_normal(mh_o,cov_o)
 
             samp_prob = -log_loss(
                 y, self.forward(X, samp_i.reshape(self.samples_i_.shape[1],self.n_hidden),\
@@ -120,7 +120,6 @@ class MLP(ClassifierMixin):
                 s_i = self.rng_.multivariate_normal(self.wi_[i], cov_i)
                 s_o = self.rng_.multivariate_normal(self.wo_[i], cov_o)
 
-
                 if self.init == "swarm":
                     wi_len = len(self.wi_[0])
                     opt_func = partial(neg_log_likelihood, X=X, y=y, mlp=self)
@@ -155,7 +154,7 @@ class MLP(ClassifierMixin):
             if self.local == "mh":
                 for i in range(self.n_iter):
                     self.wi_[i], self.wo_[i] = self.mh_step(
-                    X, y, self.wi_[i], self.wo_[i])
+                        X, y, self.wi_[i], self.wo_[i])
             elif self.local == "basinhopping":
                 wi_len = len(self.wi_[0])
                 for i in range(self.n_iter):
